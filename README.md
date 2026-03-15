@@ -20,26 +20,19 @@
 
 ### 🚀 快速开始
 
-#### 安装
-首先，克隆本仓库到本地：
-```bash
-git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
-cd CODEx-SWITCH
-```
-
 #### Windows
-双击运行 `run.bat` 或在命令行终端执行：
-```bash
-python codex.py
+使用 PowerShell 运行以下命令即可实现**一键安装/更新**（包含自动配置命令别名）：
+```powershell
+irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
 ```
 
 #### macOS / Linux
+使用终端运行以下命令即可实现**一键安装/更新**（包含自动配置命令别名）：
 ```bash
-chmod +x run.sh
-./run.sh
-# 或执行 python3 codex.py
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
 ```
-> **可选:** 运行 `python scripts/install.py` 可将工具命令自动写入 Shell 别名 (PowerShell profile 或 `.zshrc`)。
+
+> 💡 **安装成功后**，只需在终端输入 `codex` 即可随时召唤切换器！
 
 ### 📖 使用说明
 
@@ -57,10 +50,10 @@ chmod +x run.sh
 
 codex-switch/
 ├── codex.py                # 主程序 CLI 入口
-├── run.bat / run.sh        # 一键运行脚本
+├── run.bat / run.sh        # 本地运行脚本
 ├── bin/                    # 核心逻辑与业务代码
 ├── config/accounts.json    # 账号列表配置
-└── scripts/install.py      # 别名安装脚本
+└── scripts/install.py      # 本地环境别名配置脚本
 ```
 
 ### 💻 界面预览
@@ -109,26 +102,19 @@ A lightweight, cross-platform CLI for managing and switching multiple Codex acco
 
 ### 🚀 Quick Start
 
-#### Installation
-First, clone the repository to your local machine:
-```bash
-git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
-cd CODEx-SWITCH
-```
-
 #### Windows
-Double-click `run.bat` or execute the following in your terminal:
-```bash
-python codex.py
+Run the following command in PowerShell for **one-click install/update** (includes auto shell alias configuration):
+```powershell
+irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
 ```
 
 #### macOS / Linux
+Run the following command in your terminal for **one-click install/update** (includes auto shell alias configuration):
 ```bash
-chmod +x run.sh
-./run.sh
-# or run python3 codex.py
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
 ```
-> **Optional:** Run `python scripts/install.py` to automatically add the tool alias to your shell profile (PowerShell profile or `.zshrc`).
+
+> 💡 **After successful installation**, simply type `codex` in your terminal anytime to launch the switcher!
 
 ### 📖 Usage
 
