@@ -20,19 +20,29 @@
 
 ### 🚀 快速开始
 
-#### Windows
-使用 PowerShell 运行以下命令即可实现**一键安装/更新**（包含自动配置命令别名）：
-```powershell
-irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
-```
+#### 方式 1：一键自动安装 (推荐)
+能自动检测环境、下载工具，并为您配置好系统全局命别名 `codex-switch`。
+* **Windows (PowerShell)**:
+  ```powershell
+  irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
+  ```
+* **macOS / Linux (Terminal)**:
+  ```bash
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
+  ```
+> 💡 **安装成功后**，只需在任何终端输入 `codex-switch` 即可随时召唤切换器！
 
-#### macOS / Linux
-使用终端运行以下命令即可实现**一键安装/更新**（包含自动配置命令别名）：
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
-```
-
-> 💡 **安装成功后**，只需在终端输入 `codex-switch` 即可随时召唤切换器！
+#### 方式 2：本地克隆运行 (绿色免安装)
+如果你不想使用自动脚本，可以直接下载源码在本地运行：
+1. **获取代码**：
+   ```bash
+   git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
+   cd CODEx-SWITCH
+   ```
+   *(或者在网页端点击 `Code` -> `Download ZIP` 解压)*
+2. **运行工具**：
+   - **Windows**: 双击运行目录下的 `run.bat`，或者在终端执行 `python codex.py`
+   - **macOS / Linux**: 在终端执行 `chmod +x run.sh && ./run.sh`，或者执行 `python3 codex.py`
 
 ### 📖 使用说明
 
@@ -107,19 +117,29 @@ A lightweight, cross-platform CLI for managing and switching multiple Codex acco
 
 ### 🚀 Quick Start
 
-#### Windows
-Run the following command in PowerShell for **one-click install/update** (includes auto shell alias configuration):
-```powershell
-irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
-```
-
-#### macOS / Linux
-Run the following command in your terminal for **one-click install/update** (includes auto shell alias configuration):
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
-```
-
+#### Method 1: One-Click Install (Recommended)
+Automatically detects your environment, downloads the tool, and sets up a global `codex-switch` command alias.
+* **Windows (PowerShell)**:
+  ```powershell
+  irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 | iex
+  ```
+* **macOS / Linux (Terminal)**:
+  ```bash
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
+  ```
 > 💡 **After successful installation**, simply type `codex-switch` in your terminal anytime to launch the switcher!
+
+#### Method 2: Manual Clone & Run (Portable)
+If you prefer not to use the automated scripts, you can download the source and run it locally:
+1. **Get the code**:
+   ```bash
+   git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
+   cd CODEx-SWITCH
+   ```
+   *(Or click `Code` -> `Download ZIP` on the web interface to extract horizontally)*
+2. **Run the tool**:
+   - **Windows**: Double-click `run.bat` in the directory, or run `python codex.py` in your terminal.
+   - **macOS / Linux**: Run `chmod +x run.sh && ./run.sh` in your terminal, or run `python3 codex.py`.
 
 ### 📖 Usage
 
