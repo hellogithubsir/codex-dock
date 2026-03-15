@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoUrl = "https://github.com/SoKeiKei/CODEx-SWITCH.git"
 $InstallDir = Join-Path $env:USERPROFILE ".codex\codex-switch-app"
-$AliasName = "codex"
+$AliasName = "codex-switch"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "    CODEx SWITCH - Auto Installer" -ForegroundColor Cyan

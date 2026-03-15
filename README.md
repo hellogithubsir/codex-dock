@@ -32,7 +32,7 @@ irm https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.ps1 |
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
 ```
 
-> 💡 **安装成功后**，只需在终端输入 `codex` 即可随时召唤切换器！
+> 💡 **安装成功后**，只需在终端输入 `codex-switch` 即可随时召唤切换器！
 
 ### 📖 使用说明
 
@@ -119,7 +119,7 @@ Run the following command in your terminal for **one-click install/update** (inc
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/master/install.sh)"
 ```
 
-> 💡 **After successful installation**, simply type `codex` in your terminal anytime to launch the switcher!
+> 💡 **After successful installation**, simply type `codex-switch` in your terminal anytime to launch the switcher!
 
 ### 📖 Usage
 

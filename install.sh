@@ -5,7 +5,7 @@ set -e
 
 REPO_URL="https://github.com/SoKeiKei/CODEx-SWITCH.git"
 INSTALL_DIR="$HOME/.codex/codex-switch-app"
-ALIAS_NAME="codex"
+ALIAS_NAME="codex-switch"
 
 echo "========================================"
 echo "    CODEx SWITCH - Auto Installer"
