@@ -75,7 +75,7 @@ codex-switch/
 
 ```text
 +--------------------------------------------------+
-| CODEx SWITCH                                     |
+| CODEx SWITCH                             v1.0.0  |
 | account switcher                                 |
 +--------------------------------------------------+
 Current Account / 当前账号:
@@ -172,7 +172,7 @@ codex-switch/
 
 ```text
 +--------------------------------------------------+
-| CODEx SWITCH                                     |
+| CODEx SWITCH                             v1.0.0  |
 | account switcher                                 |
 +--------------------------------------------------+
 Current Account / 当前账号:
