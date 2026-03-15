@@ -20,6 +20,13 @@
 
 ### 🚀 快速开始
 
+#### 安装
+首先，克隆本仓库到本地：
+```bash
+git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
+cd CODEx-SWITCH
+```
+
 #### Windows
 双击运行 `run.bat` 或在命令行终端执行：
 ```bash
@@ -101,6 +108,13 @@ A lightweight, cross-platform CLI for managing and switching multiple Codex acco
 - **Cross-platform**: Provides one-click run scripts for Windows/macOS/Linux.
 
 ### 🚀 Quick Start
+
+#### Installation
+First, clone the repository to your local machine:
+```bash
+git clone https://github.com/SoKeiKei/CODEx-SWITCH.git
+cd CODEx-SWITCH
+```
 
 #### Windows
 Double-click `run.bat` or execute the following in your terminal:
