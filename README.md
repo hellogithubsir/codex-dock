@@ -36,9 +36,14 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/ma
 
 ### 📖 使用说明
 
-1. **添加账号**: 先在 Codex 登录账号，运行本工具选择 `2` 添加账号并设定别名（如 `gmail`、`work`）。
-2. **切换账号**: 运行工具选择 `4`，选择对应账号或 `0`（清空认证）。
-3. **生效**: 切换完成后，请**手动重启 Codex** 使更改生效。
+#### 💡 如何登录并保存新账号？（重要指引）
+1. **保存当前账号**：请**不要**在 Codex 软件内点击“退出登录(Logout)”。而是先运行本工具，按 `2` 将当前已登录的账号添加并起个别名（如 `work`）。
+2. **清空登录状态**：运行本工具，按 `4` (切换账号)，然后选择 `0` (默认/干净状态)。
+3. **登录新账号**：重新打开 Codex 软件，此时软件会提示重新登录。登录你的新账号。
+4. **保存新账号**：再次运行本工具，按 `2` 把刚登录的新账号也添加进来并起个别名（如 `gmail`）。
+5. **自由切换**：以后就可以直接通过按 `4` 在这些收录的账号间自由切换了！
+
+*(每次使用本工具切换账号后，请务必**手动重启 Codex** 软件使更改生效)*
 
 ### 📁 目录结构
 
@@ -118,9 +123,14 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/SoKeiKei/CODEx-SWITCH/ma
 
 ### 📖 Usage
 
-1. **Add Account**: Log into an account in Codex first, run this tool, choose `2` to add an account and set an alias (e.g., `gmail`, `work`).
-2. **Switch Account**: Run the tool, choose `4`, and select the corresponding account or `0` (Clear Auth).
-3. **Apply**: After switching, please **restart Codex manually** for changes to take effect.
+#### 💡 How to login and save a new account? (Important Guide)
+1. **Save current account**: Please **DO NOT** click "Logout" inside the Codex app. Instead, run this tool first, press `2` to add your currently logged-in account and give it an alias (e.g., `work`).
+2. **Clear auth state**: Run this tool, press `4` (Switch Account), and select `0` (Default/Clean state).
+3. **Login new account**: Reopen the Codex app. It will now ask you to log in. Log into your new account.
+4. **Save new account**: Run this tool again, press `2` to add this newly logged-in account and give it an alias (e.g., `gmail`).
+5. **Switch freely**: From now on, you can simply press `4` to freely switch between your saved accounts!
+
+*(Every time you switch accounts using this tool, please **manually restart Codex** for the changes to take effect)*
 
 ### 📁 Directory Layout
 
