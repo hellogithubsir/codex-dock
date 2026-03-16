@@ -298,9 +298,22 @@ class CodexService:
     @staticmethod
     def _find_windows_codex_backend_pids():
         cmd = (
-            "Get-Process -Name codex -ErrorAction SilentlyContinue "
-            "| Where-Object { $_.Path -like '*\\\\resources\\\\codex.exe' } "
-            "| Select-Object -ExpandProperty Id"
+            "$ids = @();"
+            "$procs = Get-Process -Name codex -ErrorAction SilentlyContinue;"
+            "if ($procs) { $ids += $procs | Select-Object -ExpandProperty Id };"
+            "if (-not $ids) {"
+            "  try {"
+            "    $cim = Get-CimInstance Win32_Process -Filter \"Name='codex.exe'\" | "
+            "      Select-Object ProcessId,ExecutablePath,CommandLine;"
+            "    foreach ($p in $cim) {"
+            "      $path = ($p.ExecutablePath ?? '') + ' ' + ($p.CommandLine ?? '');"
+            "      if ($path -match 'resources\\\\\\\\codex\\.exe' -or $path -match 'app\\.asar\\.unpacked\\\\\\\\codex') {"
+            "        $ids += $p.ProcessId"
+            "      }"
+            "    }"
+            "  } catch { }"
+            "};"
+            "$ids | Sort-Object -Unique"
         )
         try:
             result = subprocess.run(
