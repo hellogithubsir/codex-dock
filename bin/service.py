@@ -7,6 +7,7 @@ import base64
 import subprocess
 import signal
 import time
+import re
 from datetime import datetime
 from pathlib import Path
 from .core import CodexCore
@@ -271,30 +272,32 @@ class CodexService:
         """尝试触发 Codex 立即刷新认证，无需重启主程序"""
         try:
             if os.name == "nt":
-                if self._should_skip_backend_restart_on_windows():
-                    print("检测到 MCP 服务器配置，为避免错误页，请手动关闭并重新打开 Codex。")
-                    return False
+                restore = self._temporarily_disable_mcp_servers()
                 pids = self._find_windows_codex_backend_pids()
                 if not pids:
                     print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
+                    if restore:
+                        restore()
                     return False
-            for pid in pids:
-                try:
-                    subprocess.run(
-                        ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid}"],
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                    )
-                    time.sleep(0.8)
-                    subprocess.run(
-                        ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                    )
-                except Exception:
-                    continue
+                for pid in pids:
+                    try:
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid}"],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                        time.sleep(0.8)
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                    except Exception:
+                        continue
+                if restore:
+                    restore()
                 print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
                 return True
 
@@ -313,16 +316,59 @@ class CodexService:
             print("自动刷新失败，请手动重启 Codex。/ Auto refresh failed, please restart Codex manually.")
             return False
 
-    @staticmethod
-    def _should_skip_backend_restart_on_windows():
+    def _temporarily_disable_mcp_servers(self, hold_seconds: float = 2.5):
         config_path = Path.home() / ".codex" / "config.toml"
         if not config_path.exists():
-            return False
+            return None
         try:
-            text = config_path.read_text(encoding="utf-8", errors="ignore")
+            original = config_path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            return False
-        return "[mcp_servers" in text
+            return None
+        if "[mcp_servers" not in original:
+            return None
+
+        lines = original.splitlines(keepends=True)
+        modified = []
+        skip = False
+        section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+        for line in lines:
+            m = section_re.match(line)
+            if m:
+                section = m.group(1).strip()
+                if section == "mcp_servers" or section.startswith("mcp_servers."):
+                    skip = True
+                    continue
+                skip = False
+            if skip:
+                continue
+            modified.append(line)
+        new_text = "".join(modified)
+        if new_text == original:
+            return None
+
+        backup_path = self.accounts_dir / "config.toml.bak"
+        try:
+            backup_path.write_text(original, encoding="utf-8")
+            config_path.write_text(new_text, encoding="utf-8")
+        except Exception:
+            return None
+
+        def restore():
+            try:
+                time.sleep(hold_seconds)
+            except Exception:
+                pass
+            try:
+                config_path.write_text(original, encoding="utf-8")
+            except Exception:
+                pass
+            try:
+                if backup_path.exists():
+                    backup_path.unlink()
+            except Exception:
+                pass
+
+        return restore
 
     def _verify_auth_persisted(self, expected_email: str, wait_seconds: float = 1.5):
         if not expected_email:
