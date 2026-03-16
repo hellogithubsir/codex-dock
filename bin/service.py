@@ -274,6 +274,9 @@ class CodexService:
             if os.name == "nt":
                 self._ensure_shell_snapshot_disabled()
                 self._ensure_pencil_mcp_proxy()
+                if self._restart_codex_desktop():
+                    print("已重启 Codex 桌面端，账号将自动刷新。")
+                    return True
                 pids = self._find_windows_codex_backend_pids()
                 if not pids:
                     print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
@@ -394,6 +397,28 @@ class CodexService:
         except Exception:
             return False
         return True
+
+    @staticmethod
+    def _restart_codex_desktop():
+        cmd = (
+            "$pkg = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue;"
+            "Get-Process -Name Codex,codex -ErrorAction SilentlyContinue | Stop-Process;"
+            "Start-Sleep -Milliseconds 500;"
+            "Get-Process -Name Codex,codex -ErrorAction SilentlyContinue | Stop-Process -Force;"
+            "if ($pkg) { Start-Process \"shell:AppsFolder\\$($pkg.PackageFamilyName)!App\"; };"
+            "Start-Sleep -Milliseconds 800;"
+            "if (Get-Process -Name Codex -ErrorAction SilentlyContinue) { Write-Output 'OK' }"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", cmd],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return "OK" in (result.stdout or "")
+        except Exception:
+            return False
 
     @staticmethod
     def _ensure_shell_snapshot_disabled():
