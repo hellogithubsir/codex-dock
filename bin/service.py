@@ -6,6 +6,7 @@ import stat
 import base64
 import subprocess
 import signal
+import time
 from datetime import datetime
 from pathlib import Path
 from .core import CodexCore
@@ -264,6 +265,7 @@ class CodexService:
         print(f"  Email: {email}")
         print(f"  Plan: {plan}")
         self.refresh_codex_app()
+        self._verify_auth_persisted(expected_email=email)
 
     def refresh_codex_app(self):
         """尝试触发 Codex 立即刷新认证，无需重启主程序"""
@@ -300,6 +302,80 @@ class CodexService:
         except Exception:
             print("自动刷新失败，请手动重启 Codex。/ Auto refresh failed, please restart Codex manually.")
             return False
+
+    def _verify_auth_persisted(self, expected_email: str, wait_seconds: float = 1.5):
+        if not expected_email:
+            return
+        try:
+            time.sleep(wait_seconds)
+        except Exception:
+            pass
+        current_email, _ = self.get_current_email_and_plan()
+        if not current_email:
+            return
+        if current_email.lower() == expected_email.lower():
+            return
+        print("Detected auth.json was overwritten by desktop cache.")
+        choice = input("Clear Codex desktop auth cache and restart app? (y/N): ").strip().lower()
+        if choice == "y":
+            self.force_refresh_desktop_auth_cache()
+
+    def force_refresh_desktop_auth_cache(self):
+        """清理桌面端登录缓存（会关闭 Codex 桌面端进程）"""
+        if os.name != "nt":
+            print("Desktop auth cache cleanup is only supported on Windows.")
+            return False
+
+        # 关闭 Codex 桌面端进程以释放缓存文件锁
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-Process -Name Codex,codex -ErrorAction SilentlyContinue | Stop-Process -Force"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception:
+            pass
+
+        pkg_root = Path(os.environ.get("LOCALAPPDATA", "")) / "Packages"
+        if not pkg_root.exists():
+            print("Windows Packages directory not found.")
+            return False
+
+        candidates = [p for p in pkg_root.glob("OpenAI.Codex_*") if p.is_dir()]
+        if not candidates:
+            print("Codex desktop package not found.")
+            return False
+
+        cleaned = False
+        for pkg in candidates:
+            base = pkg / "LocalCache" / "Roaming" / "Codex"
+            if not base.exists():
+                continue
+            targets = [
+                base / "Local Storage",
+                base / "Session Storage",
+                base / "Network" / "Cookies",
+                base / "Network" / "Cookies-journal",
+                base / "Network" / "Trust Tokens",
+                base / "Network" / "Trust Tokens-journal",
+            ]
+            for t in targets:
+                if t.is_dir():
+                    shutil.rmtree(t, onerror=self._remove_readonly)
+                    cleaned = True
+                elif t.exists():
+                    try:
+                        t.unlink()
+                        cleaned = True
+                    except Exception:
+                        pass
+
+        if cleaned:
+            print("Desktop auth cache cleared. Please reopen Codex.")
+            return True
+        print("No desktop cache cleaned.")
+        return False
 
     @staticmethod
     def _find_windows_codex_backend_pids():

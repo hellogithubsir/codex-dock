@@ -53,7 +53,7 @@
 4. **保存新账号**：再次运行本工具，按 `2` 把刚登录的新账号也添加进来并起个别名（如 `gmail`）。
 5. **自由切换**：以后就可以直接通过按 `4` 在这些收录的账号间自由切换了！
 
-*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；如未生效再手动重启 Codex)*
+*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；如桌面端缓存回写导致账号不变，会提示清理桌面端登录缓存并需重新打开 Codex)*
 
 ### 📁 目录结构
 
@@ -94,6 +94,7 @@ Current Account / 当前账号:
 - 额度数据读取自本地 `~/.codex/sessions` 日志，显示可能存在少许延迟。
 - 邮箱默认掩码显示（前 2-3 位 + **）以保护隐私。
 - 工具**不上传任何数据**，所有数据及凭证仅在本地保存。
+- 若提示清理桌面端登录缓存，将关闭 Codex 桌面端并清理本机会话缓存，需要重新打开 Codex。
 
 ### 📄 许可证
 本项目采用 [MIT License](LICENSE) 许可证。
@@ -150,7 +151,7 @@ If you prefer not to use the automated scripts, you can download the source and 
 4. **Save new account**: Run this tool again, press `2` to add this newly logged-in account and give it an alias (e.g., `gmail`).
 5. **Switch freely**: From now on, you can simply press `4` to freely switch between your saved accounts!
 
-*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if it does not, manually restart Codex.)*
+*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if the desktop cache overwrites auth state, it will prompt to clear the desktop auth cache and you will need to reopen Codex.)*
 
 ### 📁 Directory Layout
 
@@ -191,6 +192,7 @@ Current Account / 当前账号:
 - Usage data is read from local `~/.codex/sessions` logs; display might lag slightly.
 - Emails are masked by default (first 2-3 characters + **) to protect privacy.
 - The tool **does not upload any data**; all data and credentials belong firmly on local storage.
+- If prompted to clear the desktop auth cache, the Codex desktop app will be closed and local session cache will be cleared; reopen Codex afterward.
 
 ### 📄 License
 This project is licensed under the [MIT License](LICENSE).
