@@ -21,7 +21,7 @@ def _style(text, *codes):
 def _banner():
     line = "+" + "-" * 50 + "+"
     print(_style(line, "36"))
-    print(_style(f"| CODEx SWITCH {'v1.0.0':>34} |", "36", "1"))
+    print(_style(f"| CODEx SWITCH {'v1.1.0':>34} |", "36", "1"))
     print(_style("| account switcher                                |", "36"))
     print(_style(line, "36"))
 
