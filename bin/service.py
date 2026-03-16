@@ -8,6 +8,7 @@ import subprocess
 import signal
 import time
 import re
+import platform
 from datetime import datetime
 from pathlib import Path
 from .core import CodexCore
@@ -301,6 +302,11 @@ class CodexService:
                 print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
                 return True
 
+            if platform.system() == "Darwin":
+                if self._restart_codex_desktop_macos():
+                    print("已重启 Codex 桌面端，账号将自动刷新。")
+                    return True
+
             pids = self._find_unix_codex_backend_pids()
             if not pids:
                 print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
@@ -417,6 +423,27 @@ class CodexService:
                 text=True,
             )
             return "OK" in (result.stdout or "")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _restart_codex_desktop_macos():
+        try:
+            subprocess.run(
+                ["osascript", "-e", 'quit app "Codex"'],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            time.sleep(0.6)
+            subprocess.run(
+                ["open", "-a", "Codex"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            time.sleep(0.6)
+            return True
         except Exception:
             return False
 
