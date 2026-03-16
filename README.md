@@ -53,7 +53,7 @@
 4. **保存新账号**：再次运行本工具，按 `2` 把刚登录的新账号也添加进来并起个别名（如 `gmail`）。
 5. **自由切换**：以后就可以直接通过按 `4` 在这些收录的账号间自由切换了！
 
-*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；如桌面端缓存回写导致账号不变，会提示关闭并重新打开 Codex)*
+*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；如检测到已配置 MCP 服务器，为避免错误页将提示手动关闭并重新打开 Codex)*
 
 ### 📁 目录结构
 
@@ -150,7 +150,7 @@ If you prefer not to use the automated scripts, you can download the source and 
 4. **Save new account**: Run this tool again, press `2` to add this newly logged-in account and give it an alias (e.g., `gmail`).
 5. **Switch freely**: From now on, you can simply press `4` to freely switch between your saved accounts!
 
-*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if the desktop cache overwrites auth state, it will prompt you to close and reopen Codex.)*
+*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if MCP servers are configured, it will ask you to close and reopen Codex to avoid error pages.)*
 
 ### 📁 Directory Layout
 

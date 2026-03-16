@@ -271,10 +271,13 @@ class CodexService:
         """尝试触发 Codex 立即刷新认证，无需重启主程序"""
         try:
             if os.name == "nt":
+                if self._should_skip_backend_restart_on_windows():
+                    print("检测到 MCP 服务器配置，为避免错误页，请手动关闭并重新打开 Codex。")
+                    return False
                 pids = self._find_windows_codex_backend_pids()
-            if not pids:
-                print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
-                return False
+                if not pids:
+                    print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
+                    return False
             for pid in pids:
                 try:
                     subprocess.run(
@@ -309,6 +312,17 @@ class CodexService:
         except Exception:
             print("自动刷新失败，请手动重启 Codex。/ Auto refresh failed, please restart Codex manually.")
             return False
+
+    @staticmethod
+    def _should_skip_backend_restart_on_windows():
+        config_path = Path.home() / ".codex" / "config.toml"
+        if not config_path.exists():
+            return False
+        try:
+            text = config_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return False
+        return "[mcp_servers" in text
 
     def _verify_auth_persisted(self, expected_email: str, wait_seconds: float = 1.5):
         if not expected_email:
