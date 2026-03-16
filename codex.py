@@ -149,14 +149,13 @@ def interactive_menu():
                 if auth_file.exists():
                     auth_file.unlink()
                 print("Switched to Default (Clean) environment. / 已切换到默认 (干净) 环境。")
-                print("Please restart Codex manually. / 请手动重启 Codex。")
+                service.refresh_codex_app()
                 print("You can now login with a new account. / 您现在可以登录新账号。")
             elif idx.strip().lower() == 'q':
                 print("Canceled. / 已取消。")
                 continue
             elif idx.isdigit() and 1 <= int(idx) <= len(aliases):
                 service.switch_account(aliases[int(idx)-1])
-                print("Please restart Codex manually for changes to take effect. / 请手动重启 Codex 使更改生效。")
             else:
                 print("Invalid choice / 无效选择")
         elif choice.strip().lower() == 'q':

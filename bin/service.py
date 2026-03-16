@@ -4,6 +4,8 @@ import glob
 import shutil
 import stat
 import base64
+import subprocess
+import signal
 from datetime import datetime
 from pathlib import Path
 from .core import CodexCore
@@ -255,3 +257,99 @@ class CodexService:
         print(f"Successfully switched to account: {matched_alias} / 已成功切换至账号: {matched_alias}")
         print(f"  Email: {email}")
         print(f"  Plan: {plan}")
+        self.refresh_codex_app()
+
+    def refresh_codex_app(self):
+        """尝试触发 Codex 立即刷新认证，无需重启主程序"""
+        try:
+            if os.name == "nt":
+                pids = self._find_windows_codex_backend_pids()
+                if not pids:
+                    print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
+                    return False
+                for pid in pids:
+                    try:
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                    except Exception:
+                        continue
+                print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
+                return True
+
+            pids = self._find_unix_codex_backend_pids()
+            if not pids:
+                print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
+                return False
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except Exception:
+                    continue
+            print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
+            return True
+        except Exception:
+            print("自动刷新失败，请手动重启 Codex。/ Auto refresh failed, please restart Codex manually.")
+            return False
+
+    @staticmethod
+    def _find_windows_codex_backend_pids():
+        cmd = (
+            "Get-Process -Name codex -ErrorAction SilentlyContinue "
+            "| Where-Object { $_.Path -like '*\\\\resources\\\\codex.exe' } "
+            "| Select-Object -ExpandProperty Id"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", cmd],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.stdout:
+                pids = []
+                for line in result.stdout.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        pids.append(int(line))
+                    except ValueError:
+                        continue
+                return pids
+        except Exception:
+            return []
+        return []
+
+    @staticmethod
+    def _find_unix_codex_backend_pids():
+        try:
+            result = subprocess.run(
+                ["ps", "-ax", "-o", "pid=", "-o", "command="],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            pids = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(None, 1)
+                if len(parts) != 2:
+                    continue
+                pid_str, cmd = parts
+                if "/resources/codex" not in cmd and "/resources/app.asar.unpacked/codex" not in cmd:
+                    continue
+                if "Codex.app/Contents/MacOS/Codex" in cmd:
+                    continue
+                try:
+                    pids.append(int(pid_str))
+                except ValueError:
+                    continue
+            return pids
+        except Exception:
+            return []
