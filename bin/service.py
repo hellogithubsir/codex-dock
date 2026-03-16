@@ -250,7 +250,13 @@ class CodexService:
             return
         
         codex_dir = Path.home() / ".codex"
-        shutil.copy2(target_auth, codex_dir / "auth.json")
+        target_path = codex_dir / "auth.json"
+        shutil.copy2(target_auth, target_path)
+        try:
+            # 强制更新时间戳，触发可能存在的文件监听刷新
+            os.utime(target_path, None)
+        except Exception:
+            pass
         
         email = accounts[matched_alias].get('email', 'Unknown')
         plan = accounts[matched_alias].get('plan', 'Unknown')
@@ -299,7 +305,10 @@ class CodexService:
     def _find_windows_codex_backend_pids():
         cmd = (
             "$ids = @();"
-            "$procs = Get-Process -Name codex -ErrorAction SilentlyContinue;"
+            "$procs = Get-Process -Name codex -ErrorAction SilentlyContinue | Where-Object {"
+            "  $p = $_.Path; if (-not $p) { $p = '' };"
+            "  $p -match 'resources\\\\\\\\codex\\.exe' -or $p -match 'app\\\\\\\\asar\\\\\\\\unpacked\\\\\\\\codex'"
+            "};"
             "if ($procs) { $ids += $procs | Select-Object -ExpandProperty Id };"
             "if (-not $ids) {"
             "  try {"
