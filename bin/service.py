@@ -272,6 +272,7 @@ class CodexService:
         """尝试触发 Codex 立即刷新认证，无需重启主程序"""
         try:
             if os.name == "nt":
+                self._ensure_shell_snapshot_disabled()
                 self._ensure_pencil_mcp_proxy()
                 pids = self._find_windows_codex_backend_pids()
                 if not pids:
@@ -393,6 +394,31 @@ class CodexService:
         except Exception:
             return False
         return True
+
+    @staticmethod
+    def _ensure_shell_snapshot_disabled():
+        config_path = Path.home() / ".codex" / "config.toml"
+        if not config_path.exists():
+            return False
+        try:
+            text = config_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return False
+
+        line_re = re.compile(r'^\s*shell_snapshot\s*=\s*(true|false)\s*$', re.IGNORECASE | re.MULTILINE)
+        if line_re.search(text):
+            new_text = line_re.sub("shell_snapshot = false", text)
+        else:
+            suffix = "\n" if text.endswith("\n") else "\n\n"
+            new_text = text + f"{suffix}shell_snapshot = false\n"
+
+        if new_text == text:
+            return True
+        try:
+            config_path.write_text(new_text, encoding="utf-8")
+            return True
+        except Exception:
+            return False
 
     def _verify_auth_persisted(self, expected_email: str, wait_seconds: float = 1.5):
         if not expected_email:

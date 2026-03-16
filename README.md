@@ -53,7 +53,7 @@
 4. **保存新账号**：再次运行本工具，按 `2` 把刚登录的新账号也添加进来并起个别名（如 `gmail`）。
 5. **自由切换**：以后就可以直接通过按 `4` 在这些收录的账号间自由切换了！
 
-*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；若检测到 Pencil MCP，工具会自动加一层兼容代理以避免错误页)*
+*(切换账号后工具会尝试自动刷新 Codex 后台进程使账号立即生效；若检测到 Pencil MCP，工具会自动加一层兼容代理；同时会关闭 PowerShell 的 shell_snapshot 以避免错误页)*
 
 ### 📁 目录结构
 
@@ -150,7 +150,7 @@ If you prefer not to use the automated scripts, you can download the source and 
 4. **Save new account**: Run this tool again, press `2` to add this newly logged-in account and give it an alias (e.g., `gmail`).
 5. **Switch freely**: From now on, you can simply press `4` to freely switch between your saved accounts!
 
-*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if the Pencil MCP server is detected, a compatibility proxy is added to avoid error pages.)*
+*(After switching accounts, the tool will attempt to refresh the Codex backend so changes take effect immediately; if the Pencil MCP server is detected, a compatibility proxy is added, and PowerShell shell_snapshot is disabled to avoid error pages.)*
 
 ### 📁 Directory Layout
 
