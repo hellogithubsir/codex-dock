@@ -272,12 +272,10 @@ class CodexService:
         """尝试触发 Codex 立即刷新认证，无需重启主程序"""
         try:
             if os.name == "nt":
-                restore = self._temporarily_disable_mcp_servers()
+                self._ensure_pencil_mcp_proxy()
                 pids = self._find_windows_codex_backend_pids()
                 if not pids:
                     print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
-                    if restore:
-                        restore()
                     return False
                 for pid in pids:
                     try:
@@ -296,8 +294,6 @@ class CodexService:
                         )
                     except Exception:
                         continue
-                if restore:
-                    restore()
                 print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
                 return True
 
@@ -316,59 +312,87 @@ class CodexService:
             print("自动刷新失败，请手动重启 Codex。/ Auto refresh failed, please restart Codex manually.")
             return False
 
-    def _temporarily_disable_mcp_servers(self, hold_seconds: float = 2.5):
+    def _ensure_pencil_mcp_proxy(self):
+        if os.name != "nt":
+            return False
         config_path = Path.home() / ".codex" / "config.toml"
         if not config_path.exists():
-            return None
+            return False
         try:
-            original = config_path.read_text(encoding="utf-8", errors="ignore")
+            text = config_path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            return None
-        if "[mcp_servers" not in original:
-            return None
+            return False
+        if "[mcp_servers.pencil]" not in text:
+            return False
 
-        lines = original.splitlines(keepends=True)
-        modified = []
-        skip = False
+        lines = text.splitlines(keepends=True)
         section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
-        for line in lines:
+        cmd_re = re.compile(r'^\s*command\s*=\s*"(.*)"\s*$')
+        args_re = re.compile(r'^\s*args\s*=\s*\[(.*)\]\s*$')
+
+        start = None
+        end = None
+        for i, line in enumerate(lines):
             m = section_re.match(line)
-            if m:
-                section = m.group(1).strip()
-                if section == "mcp_servers" or section.startswith("mcp_servers."):
-                    skip = True
-                    continue
-                skip = False
-            if skip:
+            if m and m.group(1).strip() == "mcp_servers.pencil":
+                start = i
                 continue
-            modified.append(line)
-        new_text = "".join(modified)
-        if new_text == original:
-            return None
+            if start is not None and m:
+                end = i
+                break
+        if start is None:
+            return False
+        if end is None:
+            end = len(lines)
 
-        backup_path = self.accounts_dir / "config.toml.bak"
+        cmd_line_idx = None
+        args_line_idx = None
+        cmd_value = None
+        args_value = []
+        for i in range(start + 1, end):
+            line = lines[i]
+            m_cmd = cmd_re.match(line)
+            if m_cmd:
+                cmd_line_idx = i
+                cmd_value = m_cmd.group(1)
+                continue
+            m_args = args_re.match(line)
+            if m_args:
+                args_line_idx = i
+                args_value = re.findall(r'"([^"]*)"', m_args.group(1))
+                continue
+
+        if not cmd_value:
+            return False
+        if cmd_value.endswith("mcp_proxy.py") or any("mcp_proxy.py" in a for a in args_value):
+            return True
+
+        proxy_path = (Path(__file__).parent / "mcp_proxy.py").resolve()
+        new_cmd = "py"
+        new_args = ["-3", str(proxy_path), "--", cmd_value] + args_value
+
+        def toml_quote(s: str) -> str:
+            return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+        new_cmd_line = f"command = {toml_quote(new_cmd)}\n"
+        new_args_line = "args = [ " + ", ".join(toml_quote(a) for a in new_args) + " ]\n"
+
+        if cmd_line_idx is None or args_line_idx is None:
+            return False
+
+        lines[cmd_line_idx] = new_cmd_line
+        lines[args_line_idx] = new_args_line
+
+        backup_path = self.accounts_dir / "pencil_mcp_original.json"
         try:
-            backup_path.write_text(original, encoding="utf-8")
-            config_path.write_text(new_text, encoding="utf-8")
+            backup_path.write_text(
+                json.dumps({"command": cmd_value, "args": args_value}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            config_path.write_text("".join(lines), encoding="utf-8")
         except Exception:
-            return None
-
-        def restore():
-            try:
-                time.sleep(hold_seconds)
-            except Exception:
-                pass
-            try:
-                config_path.write_text(original, encoding="utf-8")
-            except Exception:
-                pass
-            try:
-                if backup_path.exists():
-                    backup_path.unlink()
-            except Exception:
-                pass
-
-        return restore
+            return False
+        return True
 
     def _verify_auth_persisted(self, expected_email: str, wait_seconds: float = 1.5):
         if not expected_email:
