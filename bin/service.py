@@ -272,19 +272,26 @@ class CodexService:
         try:
             if os.name == "nt":
                 pids = self._find_windows_codex_backend_pids()
-                if not pids:
-                    print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
-                    return False
-                for pid in pids:
-                    try:
-                        subprocess.run(
-                            ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
-                            check=False,
-                            capture_output=True,
-                            text=True,
-                        )
-                    except Exception:
-                        continue
+            if not pids:
+                print("未检测到 Codex 后台进程，可能未启动或无权限。/ No Codex backend process found.")
+                return False
+            for pid in pids:
+                try:
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid}"],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    time.sleep(0.8)
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                except Exception:
+                    continue
                 print("已请求 Codex 后台进程重启，账号将自动刷新。/ Codex backend restarted for auth refresh.")
                 return True
 
