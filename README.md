@@ -17,6 +17,7 @@
 - **状态展示**：直观显示订阅类型 (Team/Plus/Pro/Free) 及剩余额度。
 - **极简交互**：双语菜单，操作简单直观。
 - **跨平台**：提供 Windows/macOS/Linux 一键运行脚本。
+- **自动刷新**：切换后自动重启 Codex 桌面端以完成账号刷新，Windows 已验证，macOS 未测试。
 
 ### 🚀 快速开始
 
@@ -114,6 +115,7 @@ A lightweight, cross-platform CLI for managing and switching multiple Codex acco
 - **Status Display**: Intuitively shows subscription plan (Team/Plus/Pro/Free) and remaining usage.
 - **Interactive UI**: Bilingual menu with simple, intuitive operations.
 - **Cross-platform**: Provides one-click run scripts for Windows/macOS/Linux.
+- **Auto Refresh**: Automatically restarts the Codex desktop app after switching to apply the new account. Verified on Windows, untested on macOS.
 
 ### 🚀 Quick Start
 
