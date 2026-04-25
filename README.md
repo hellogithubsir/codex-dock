@@ -18,7 +18,8 @@
 6. 账户 token 自动刷新
 7. 按当前使用状态、会员、额度、重置时间的排序规则
 8. 启动时检查账户并自动刷新到期额度
-9. 更直观的启动/安装脚本命名
+9. 按账号排队执行的 token 保活刷新（24 小时加随机偏移）
+10. 更直观的启动/安装脚本命名
 
 ### ⚙️ 环境依赖
 
@@ -33,6 +34,7 @@
 - 网页总览：提供 Web 面板查看账号、额度、会员状态和重置时间。
 - 精准刷新：支持调用官方 usage 接口获取更准确的额度数据。
 - 自动刷新：支持账户 token 自动刷新，并在启动时检查到期额度后自动重试刷新。
+- Token 保活队列：后台按账号串行刷新登录凭据，为每个账号生成 `24 小时 + 随机分钟` 的下一次刷新时间，降低多个账号同时刷新导致 refresh token 冲突的概率。
 - 智能排序：按当前使用状态、会员、额度、重置时间对账号排序。
 - 跨平台：提供 Windows / macOS / Linux 启动脚本和安装脚本。
 
@@ -112,6 +114,7 @@ python -m scripts --cli
 - 切换回默认干净环境
 - 隐藏或显示邮箱
 - 在当前账号未保存时给出提醒
+- 后台自动维护每个已保存账号的 token 保活节奏
 
 #### ⌨️ CLI 菜单可以做什么？
 
@@ -154,12 +157,22 @@ codex-dock/
 - `scripts/web.py`：网页面板。
 - `scripts/mcp_stdio_proxy.py`：MCP stdio 兼容代理。
 
+### 🔄 Token 保活说明
+
+- 每个已保存账号都会在本地归档 `auth.json` 中记录 `last_refresh` 和 `next_token_refresh_at`。
+- 后台线程会按账号排队检查，到达计划时间后串行刷新 token，而不是并发请求。
+- 默认下一次刷新时间为上次成功刷新后的 `24 小时 + 5~90 分钟随机偏移`。
+- 刷新成功后会立即写回新的 `access_token`、`id_token`、`refresh_token` 和下一次计划时间。
+- 如果服务端返回 `401 Unauthorized` 或提示 refresh token 已被使用，工具会记录中文错误提示；这类账号需要重新登录一次后再保存。
+- 保活刷新只负责更新登录凭据；额度数据仍建议通过“刷新额度”或“精准刷新”查看。
+
 ### ⚠️ 注意事项
 
 - 当前登录信息默认来自 `~/.codex/auth.json`；如果设置了 `CODEX_HOME`，则使用 `$CODEX_HOME/auth.json`。
 - 已保存账号默认备份到 `~/.codex/codex-dock/<别名>/auth.json`；如果设置了 `CODEX_HOME`，则使用 `$CODEX_HOME/codex-dock/<别名>/auth.json`。
 - 本地额度快照默认来自 `~/.codex/sessions`；如果设置了 `CODEX_HOME`，则使用 `$CODEX_HOME/sessions`。
 - CLI 的本地快照可能不如网页精准刷新准确，建议日常使用 Web 面板。
+- Token 保活机制会尽量维持已保存账号可刷新，但如果 refresh token 已被其他实例使用、被服务端轮换或撤销，仍然需要重新登录。
 - 邮箱默认可按掩码显示，以保护隐私。
 - 工具不会上传本地认证文件，数据默认只保留在本机。
 
@@ -183,7 +196,8 @@ This project is inspired by [SoKeiKei/CODEx-SWITCH](https://github.com/SoKeiKei/
 6. Automatic account token refresh
 7. Account sorting by current state, membership, quota, and reset time
 8. Startup checks that auto-refresh accounts whose quota window has expired
-9. Clearer launcher and installer script naming
+9. Queued token keepalive refresh with a 24-hour base interval plus random jitter
+10. Clearer launcher and installer script naming
 
 ### ⚙️ Prerequisites
 
@@ -198,6 +212,7 @@ This project is inspired by [SoKeiKei/CODEx-SWITCH](https://github.com/SoKeiKei/
 - Web dashboard: inspect accounts, quota, member status, and reset times visually.
 - Precise refresh: call the official usage endpoint for more accurate quota data.
 - Auto refresh: refresh account tokens automatically and retry quota refresh on startup when needed.
+- Token keepalive queue: refresh saved account credentials serially in the background and assign each account a `24 hours + random minutes` next-refresh schedule to reduce refresh-token collisions.
 - Smart sorting: sort accounts by current state, membership, quota, and reset time.
 - Cross-platform: provide launcher and installer scripts for Windows / macOS / Linux.
 
@@ -254,6 +269,15 @@ or:
 ```bash
 python -m scripts --cli
 ```
+
+### 🔄 Token Keepalive
+
+- Each saved account stores `last_refresh` and `next_token_refresh_at` in its archived `auth.json`.
+- A background worker checks accounts in queue order and refreshes tokens serially when their scheduled time arrives.
+- The default next refresh is `24 hours + 5-90 minutes of random jitter` after the last successful refresh.
+- After a successful refresh, the tool immediately persists the new `access_token`, `id_token`, `refresh_token`, and the next scheduled refresh time.
+- If the service returns `401 Unauthorized` or reports that the refresh token has already been used, the tool records a friendly error message; that account must be signed in again and re-saved.
+- Keepalive refresh only maintains credentials. Use quota refresh or precise refresh when you need the latest usage data.
 
 ### 📖 Usage
 
