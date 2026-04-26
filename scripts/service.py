@@ -28,9 +28,11 @@ class CodexService:
     STARTUP_REFRESH_RETRY_SECONDS = (60.0, 120.0)
     BULK_REFRESH_THROTTLE_SECONDS = 1.0
     TOKEN_KEEPALIVE_BASE_HOURS = 24
-    TOKEN_KEEPALIVE_JITTER_MINUTES = (5, 90)
-    TOKEN_KEEPALIVE_POLL_SECONDS = 30.0
-    TOKEN_KEEPALIVE_ERROR_BACKOFF_MINUTES = 360
+    TOKEN_KEEPALIVE_JITTER_MINUTES = (120, 720)
+    TOKEN_KEEPALIVE_INITIAL_DELAY_MINUTES = (20, 90)
+    TOKEN_KEEPALIVE_POLL_SECONDS = 60.0
+    TOKEN_KEEPALIVE_ERROR_BACKOFF_MINUTES = 720
+    TOKEN_KEEPALIVE_MAX_ACCOUNTS_PER_CYCLE = 1
     _startup_refresh_started = False
     _startup_refresh_guard = threading.Lock()
     _token_keepalive_started = False
@@ -40,14 +42,19 @@ class CodexService:
     def __init__(self, accounts_path: str = "config/accounts.json"):
         self.root = Path(__file__).resolve().parent.parent
         self.accounts_path = self.root / accounts_path
+        self.settings_path = self.root / "config" / "settings.json"
         self.accounts_path.parent.mkdir(parents=True, exist_ok=True)
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.accounts_path.exists():
             self.accounts_path.write_text("{}", encoding="utf-8")
+        if not self.settings_path.exists():
+            self.settings_path.write_text(json.dumps(self.default_settings(), ensure_ascii=False, indent=2), encoding="utf-8")
         self.archive_dir = self.codex_dir / self.ARCHIVE_DIR_NAME
         self.archive_dir.mkdir(parents=True, exist_ok=True)
         self._state_lock = threading.RLock()
         self._kickoff_startup_refresh()
-        self._kickoff_token_keepalive_loop()
+        if self.is_token_keepalive_enabled():
+            self._kickoff_token_keepalive_loop()
 
     @property
     def codex_dir(self) -> Path:
@@ -81,6 +88,40 @@ class CodexService:
             return json.loads(self.accounts_path.read_text(encoding="utf-8"))
         except Exception:
             return {}
+
+    @staticmethod
+    def default_settings() -> dict[str, Any]:
+        return {"token_keepalive_enabled": False}
+
+    def get_settings(self) -> dict[str, Any]:
+        with self._state_lock:
+            try:
+                raw = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            except Exception:
+                raw = {}
+            merged = self.default_settings()
+            merged.update(raw if isinstance(raw, dict) else {})
+            return merged
+
+    def save_settings(self, settings: dict[str, Any]) -> None:
+        with self._state_lock:
+            merged = self.default_settings()
+            merged.update(settings if isinstance(settings, dict) else {})
+            self.settings_path.write_text(
+                json.dumps(merged, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+    def is_token_keepalive_enabled(self) -> bool:
+        return bool(self.get_settings().get("token_keepalive_enabled"))
+
+    def set_token_keepalive_enabled(self, enabled: bool) -> dict[str, Any]:
+        settings = self.get_settings()
+        settings["token_keepalive_enabled"] = bool(enabled)
+        self.save_settings(settings)
+        if enabled:
+            self._kickoff_token_keepalive_loop()
+        return settings
 
     @staticmethod
     def _identity_sort_value(value: Any) -> str:
@@ -429,7 +470,11 @@ class CodexService:
             rows.append(item)
         rows.sort(key=lambda item: tuple(item.get("sort_key") or ()))
         current["plan"] = current_display_plan
-        return {"current": current, "accounts": rows}
+        return {
+            "current": current,
+            "accounts": rows,
+            "settings": self.get_settings(),
+        }
 
     def iter_accounts_for_display(self) -> list[dict[str, Any]]:
         return self.build_dashboard_snapshot(include_live_current_snapshot=False)["accounts"]
@@ -457,6 +502,12 @@ class CodexService:
         low, high = self.TOKEN_KEEPALIVE_JITTER_MINUTES
         jitter_minutes = random.randint(int(low), int(high))
         return now + timedelta(hours=self.TOKEN_KEEPALIVE_BASE_HOURS, minutes=jitter_minutes)
+
+    def _initial_token_keepalive_time(self, now: datetime | None = None) -> datetime:
+        now = now or datetime.now()
+        low, high = self.TOKEN_KEEPALIVE_INITIAL_DELAY_MINUTES
+        delay_minutes = random.randint(int(low), int(high))
+        return now + timedelta(minutes=delay_minutes)
 
     def _save_keepalive_schedule(
         self,
@@ -493,7 +544,7 @@ class CodexService:
             if due_base > now:
                 next_refresh_dt = self._next_token_keepalive_time(last_refresh_dt)
             else:
-                next_refresh_dt = now
+                next_refresh_dt = self._initial_token_keepalive_time(now)
         else:
             try:
                 auth_mtime_dt = datetime.fromtimestamp(auth_path.stat().st_mtime)
@@ -502,7 +553,7 @@ class CodexService:
             if auth_mtime_dt is not None and auth_mtime_dt + timedelta(hours=self.TOKEN_KEEPALIVE_BASE_HOURS) > now:
                 next_refresh_dt = self._next_token_keepalive_time(auth_mtime_dt)
             else:
-                next_refresh_dt = now
+                next_refresh_dt = self._initial_token_keepalive_time(now)
         self._save_keepalive_schedule(auth_payload, auth_path, next_refresh_dt, error_message=error_message)
         return next_refresh_dt, error_message
 
@@ -572,7 +623,10 @@ class CodexService:
     def _token_keepalive_worker(self) -> None:
         while True:
             try:
-                due_aliases = self._token_keepalive_targets()
+                if not self.is_token_keepalive_enabled():
+                    time.sleep(self.TOKEN_KEEPALIVE_POLL_SECONDS)
+                    continue
+                due_aliases = self._token_keepalive_targets()[: self.TOKEN_KEEPALIVE_MAX_ACCOUNTS_PER_CYCLE]
                 for alias in due_aliases:
                     try:
                         self.refresh_access_token_for_alias(alias)
