@@ -166,6 +166,36 @@ HTML = """<!doctype html>
       align-items: center;
       flex-wrap: wrap;
     }
+    .tip-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+    .tip-wrap::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 10px);
+      transform: translateX(-50%) translateY(4px);
+      min-width: 220px;
+      max-width: 280px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(17, 14, 29, .96);
+      border: 1px solid rgba(255,255,255,.12);
+      color: var(--muted-strong);
+      font: 600 12px/1.5 "SF Pro Display", "Aptos", "Segoe UI", sans-serif;
+      box-shadow: 0 14px 30px rgba(0,0,0,.32);
+      pointer-events: none;
+      opacity: 0;
+      white-space: normal;
+      z-index: 20;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .tip-wrap:hover::after,
+    .tip-wrap:focus-within::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
     .tab {
       flex: none;
       border: 1px solid rgba(255,255,255,.10);
@@ -304,9 +334,11 @@ HTML = """<!doctype html>
       box-shadow: 0 18px 60px rgba(53,211,154,.10), var(--shadow);
     }
     .card-head {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr);
       align-items: center;
-      gap: 9px;
+      column-gap: 9px;
+      row-gap: 6px;
     }
     .status-dot {
       width: 11px;
@@ -338,12 +370,17 @@ HTML = """<!doctype html>
     .meta {
       min-width: 0;
       flex: 1;
+      display: grid;
+      grid-template-rows: auto auto;
+      gap: 0;
     }
     .pills {
       display: flex;
       gap: 6px;
       margin-bottom: 6px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow: hidden;
+      min-width: 0;
     }
     .pill {
       display: inline-flex;
@@ -355,6 +392,8 @@ HTML = """<!doctype html>
       color: var(--muted);
       font-size: 10px;
       font-weight: 700;
+      flex: none;
+      white-space: nowrap;
     }
     .pill.codex {
       background: rgba(111,132,255,.26);
@@ -375,6 +414,7 @@ HTML = """<!doctype html>
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
     }
     .meta-line {
       margin-top: 10px;
@@ -717,10 +757,24 @@ HTML = """<!doctype html>
         </div>
       </div>
       <div class="actions">
-        <button class="btn green" onclick="refreshAllAccounts(false)">刷新额度</button>
-        <button class="btn blue" onclick="refreshAllAccounts(true)">精准刷新</button>
-        <button class="btn blue" onclick="addAccount()">添加当前账号</button>
-        <button class="btn red" onclick="switchDefault()">切换默认环境</button>
+        <span class="tip-wrap" data-tip="同步全部已保存账号的额度视图，速度更快，适合日常查看。">
+          <button class="btn green" onclick="refreshAllAccounts(false)">刷新额度</button>
+        </span>
+        <span class="tip-wrap" data-tip="逐个账号请求官网 usage 接口，数据更准，但更慢，也更容易触发限制。">
+          <button class="btn blue" onclick="refreshAllAccounts(true)">精准刷新</button>
+        </span>
+        <span class="tip-wrap" data-tip="把当前已经登录的账号保存到本工具里；如果别名已存在，会用当前登录信息覆盖更新。">
+          <button class="btn blue" onclick="addAccount()">添加当前账号</button>
+        </span>
+        <span class="tip-wrap" data-tip="清理当前登录态并回到默认干净环境，适合重新登录新账号或重新开始一组切换流程。">
+          <button class="btn red" onclick="switchDefault()">切换默认环境</button>
+        </span>
+        <span
+          class="tip-wrap"
+          data-tip="开启后，系统会按更保守的随机队列节奏，在后台串行刷新已保存账号的登录凭据；关闭后不会自动保活。建议仅在确实需要长期保活时开启。"
+        >
+          <button id="toggleKeepaliveBtn" class="btn soft" onclick="toggleKeepalive()">保活已关闭</button>
+        </span>
         <button class="btn soft" onclick="shutdownPanel()">关闭服务</button>
       </div>
     </section>
@@ -787,15 +841,27 @@ HTML = """<!doctype html>
             <div class="guide-note warn">简单理解：普通刷新更快，精准刷新更准。前者适合快速查看，后者适合认真核对最新额度时使用。</div>
           </article>
           <article class="guide-card glass">
-            <h3>启动自动刷新逻辑</h3>
+            <h3>自动刷新与保活开关</h3>
             <ul>
               <li>每次启动服务时，会用当前系统时间对比每个账号的额度重置时间。</li>
               <li>只有当前系统时间已经大于额度重置时间的账号，才会在后台自动执行一次 <span class="kbd">精准刷新</span>。</li>
               <li>如果自动刷新成功并且恢复了额度，这个账号就不会再继续自动刷新。</li>
               <li>如果刷新失败，或刷新成功但额度仍然是 0，会等待 1 分钟再试一次；第二次仍失败或无额度，会再等待 2 分钟做最后一次尝试。</li>
               <li>第三次仍失败或仍无额度时，系统会放弃这个账号的本轮自动刷新，避免频繁请求官网接口。</li>
+              <li>顶部按钮 <span class="kbd">保活已关闭</span> / <span class="kbd">保活已开启</span> 用来控制后台 token 保活队列；默认关闭，只有开启后才会自动保活。</li>
             </ul>
-            <div class="guide-note warn">这套重试逻辑只用于启动后的后台自动刷新；你手动点击卡片里的 <span class="kbd">刷新</span> / <span class="kbd">精准</span> 或顶部批量按钮时，不会被自动等待 1 分钟、2 分钟。</div>
+            <div class="guide-note warn">这套重试逻辑只用于启动后的后台自动刷新；你手动点击卡片里的 <span class="kbd">刷新</span> / <span class="kbd">精准</span> 或顶部批量按钮时，不会被自动等待 1 分钟、2 分钟。保活开关也只影响 token 保活，不会替代你手动查看额度。</div>
+          </article>
+          <article class="guide-card glass">
+            <h3>保活策略与风险控制</h3>
+            <ul>
+              <li>开启保活后，系统会按更保守的队列节奏，在后台串行刷新已保存账号的登录凭据。</li>
+              <li>默认策略不是固定 24 小时整，而是以上次成功刷新为基准，延后到 <span class="kbd">24 小时 + 2~12 小时随机偏移</span>。</li>
+              <li>首次启动不会立刻把所有老账号都补刷，而是为待处理账号安排 <span class="kbd">20~90 分钟</span> 的随机首轮延迟。</li>
+              <li>每轮最多只处理 1 个到期账号；如果失败，会退避约 12 小时再尝试。</li>
+              <li>如果服务端提示 refresh token 已失效、已被使用或登录凭据无效，这个账号仍然需要重新登录一次后再保存。</li>
+            </ul>
+            <div class="guide-note">如果你只是日常切换和查看账号，保活可以保持关闭；只有确实需要长期保留多账号登录态时，再手动开启更合适。</div>
           </article>
           <article class="guide-card glass">
             <h3>软件启动说明</h3>
@@ -841,8 +907,10 @@ HTML = """<!doctype html>
     const tabDashboard = document.getElementById("tab-dashboard");
     const tabGuide = document.getElementById("tab-guide");
     const toggleEmailMaskBtn = document.getElementById("toggleEmailMaskBtn");
+    const toggleKeepaliveBtn = document.getElementById("toggleKeepaliveBtn");
     const detachedAlert = document.getElementById("detachedAlert");
     let maskEmailsEnabled = true;
+    let keepaliveEnabled = false;
     function appIconSvg(idSeed) {
       const gradientId = `cardIconGradient-${String(idSeed || "account").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
       return `
@@ -948,6 +1016,13 @@ HTML = """<!doctype html>
       toggleEmailMaskBtn.classList.toggle("active", !maskEmailsEnabled);
     }
 
+    function updateKeepaliveButton(settings = {}) {
+      keepaliveEnabled = Boolean(settings.token_keepalive_enabled);
+      if (!toggleKeepaliveBtn) return;
+      toggleKeepaliveBtn.textContent = keepaliveEnabled ? "保活已开启" : "保活已关闭";
+      toggleKeepaliveBtn.classList.toggle("active", keepaliveEnabled);
+    }
+
     function planSupportsFiveHour(plan) {
       const normalized = String(plan || "").trim().toLowerCase();
       return !["", "n/a", "unknown", "free"].includes(normalized);
@@ -1045,10 +1120,9 @@ HTML = """<!doctype html>
               <div class="logo">${appIconSvg(account.alias)}</div>
               <div class="meta">
                 <div class="pills">
-                  <span class="pill codex">Codex</span>
+                  <span class="pill ${account.refresh_due ? "warn" : "codex"}">${account.refresh_due ? "临期" : "Codex"}</span>
                   <span class="pill ${limit && Number(limit.left_percent || 0) > 0 ? "member" : ""}">${limit && Number(limit.left_percent || 0) > 0 ? "有额度" : "无额度"}</span>
                   <span class="pill ${account.is_member ? "member" : ""}">${account.is_member ? "会员" : "普通"}</span>
-                  ${account.refresh_due ? '<span class="pill warn">临期</span>' : ""}
                 </div>
                 <div class="email">${displayEmail(account.email)}</div>
               </div>
@@ -1093,6 +1167,7 @@ HTML = """<!doctype html>
     async function loadState(message = "已加载", notify = true) {
       const data = await request("/api/state");
       updateEmailMaskButton();
+      updateKeepaliveButton(data.settings || {});
       updateDetachedAlert(data);
       renderSummary(data);
       renderCards(data);
@@ -1107,11 +1182,25 @@ HTML = """<!doctype html>
       try {
         const data = await request("/api/state");
         updateEmailMaskButton();
+        updateKeepaliveButton(data.settings || {});
         renderSummary(data);
         renderCards(data);
         setStatus(maskEmailsEnabled ? "已隐藏账户邮箱" : "已显示完整邮箱");
       } catch (error) {
         setStatus(`切换邮箱显示失败：${error.message}`);
+      }
+    }
+
+    async function toggleKeepalive() {
+      const target = !keepaliveEnabled;
+      try {
+        const result = await request("/api/settings/token-keepalive", "POST", { enabled: target });
+        keepaliveEnabled = Boolean(result.settings && result.settings.token_keepalive_enabled);
+        updateKeepaliveButton(result.settings || {});
+        await loadState("已更新页面", false);
+        setStatus(keepaliveEnabled ? "已开启保活刷新" : "已关闭保活刷新");
+      } catch (error) {
+        setStatus(`切换保活刷新失败：${error.message}`);
       }
     }
 
@@ -1449,6 +1538,11 @@ def _make_handler(app, server_ref):
                 if self.path == "/api/refresh-all-precise":
                     result = app.service.refresh_all_accounts_precise(throttle_seconds=1.0)
                     _json_response(self, HTTPStatus.OK, result)
+                    return
+                if self.path == "/api/settings/token-keepalive":
+                    enabled = bool(payload.get("enabled"))
+                    settings = app.service.set_token_keepalive_enabled(enabled)
+                    _json_response(self, HTTPStatus.OK, {"ok": True, "settings": settings})
                     return
                 if self.path == "/api/add":
                     alias = str(payload.get("alias") or "").strip()

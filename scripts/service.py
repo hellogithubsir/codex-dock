@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import platform
+import random
 import re
 import shutil
 import signal
@@ -26,20 +27,34 @@ class CodexService:
     STARTUP_REFRESH_THROTTLE_SECONDS = 1.0
     STARTUP_REFRESH_RETRY_SECONDS = (60.0, 120.0)
     BULK_REFRESH_THROTTLE_SECONDS = 1.0
+    TOKEN_KEEPALIVE_BASE_HOURS = 24
+    TOKEN_KEEPALIVE_JITTER_MINUTES = (120, 720)
+    TOKEN_KEEPALIVE_INITIAL_DELAY_MINUTES = (20, 90)
+    TOKEN_KEEPALIVE_POLL_SECONDS = 60.0
+    TOKEN_KEEPALIVE_ERROR_BACKOFF_MINUTES = 720
+    TOKEN_KEEPALIVE_MAX_ACCOUNTS_PER_CYCLE = 1
     _startup_refresh_started = False
     _startup_refresh_guard = threading.Lock()
+    _token_keepalive_started = False
+    _token_keepalive_guard = threading.Lock()
     _bulk_refresh_lock = threading.RLock()
 
     def __init__(self, accounts_path: str = "config/accounts.json"):
         self.root = Path(__file__).resolve().parent.parent
         self.accounts_path = self.root / accounts_path
+        self.settings_path = self.root / "config" / "settings.json"
         self.accounts_path.parent.mkdir(parents=True, exist_ok=True)
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.accounts_path.exists():
             self.accounts_path.write_text("{}", encoding="utf-8")
+        if not self.settings_path.exists():
+            self.settings_path.write_text(json.dumps(self.default_settings(), ensure_ascii=False, indent=2), encoding="utf-8")
         self.archive_dir = self.codex_dir / self.ARCHIVE_DIR_NAME
         self.archive_dir.mkdir(parents=True, exist_ok=True)
         self._state_lock = threading.RLock()
         self._kickoff_startup_refresh()
+        if self.is_token_keepalive_enabled():
+            self._kickoff_token_keepalive_loop()
 
     @property
     def codex_dir(self) -> Path:
@@ -73,6 +88,40 @@ class CodexService:
             return json.loads(self.accounts_path.read_text(encoding="utf-8"))
         except Exception:
             return {}
+
+    @staticmethod
+    def default_settings() -> dict[str, Any]:
+        return {"token_keepalive_enabled": False}
+
+    def get_settings(self) -> dict[str, Any]:
+        with self._state_lock:
+            try:
+                raw = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            except Exception:
+                raw = {}
+            merged = self.default_settings()
+            merged.update(raw if isinstance(raw, dict) else {})
+            return merged
+
+    def save_settings(self, settings: dict[str, Any]) -> None:
+        with self._state_lock:
+            merged = self.default_settings()
+            merged.update(settings if isinstance(settings, dict) else {})
+            self.settings_path.write_text(
+                json.dumps(merged, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+    def is_token_keepalive_enabled(self) -> bool:
+        return bool(self.get_settings().get("token_keepalive_enabled"))
+
+    def set_token_keepalive_enabled(self, enabled: bool) -> dict[str, Any]:
+        settings = self.get_settings()
+        settings["token_keepalive_enabled"] = bool(enabled)
+        self.save_settings(settings)
+        if enabled:
+            self._kickoff_token_keepalive_loop()
+        return settings
 
     @staticmethod
     def _identity_sort_value(value: Any) -> str:
@@ -384,6 +433,7 @@ class CodexService:
             row["subscription_until_text"] = "N/A"
         row["sort_key"] = list(profile["sort_bucket"])
         row["usage_limits"] = self._public_usage_limits(profile.get("usage_limits"))
+        row.update(self._read_token_keepalive_summary(alias, now=now))
         return row
 
     def build_dashboard_snapshot(
@@ -420,7 +470,11 @@ class CodexService:
             rows.append(item)
         rows.sort(key=lambda item: tuple(item.get("sort_key") or ()))
         current["plan"] = current_display_plan
-        return {"current": current, "accounts": rows}
+        return {
+            "current": current,
+            "accounts": rows,
+            "settings": self.get_settings(),
+        }
 
     def iter_accounts_for_display(self) -> list[dict[str, Any]]:
         return self.build_dashboard_snapshot(include_live_current_snapshot=False)["accounts"]
@@ -441,6 +495,155 @@ class CodexService:
                 return
             cls._startup_refresh_started = True
         thread = threading.Thread(target=self._startup_refresh_worker, name="codex-startup-refresh", daemon=True)
+        thread.start()
+
+    def _next_token_keepalive_time(self, now: datetime | None = None) -> datetime:
+        now = now or datetime.now()
+        low, high = self.TOKEN_KEEPALIVE_JITTER_MINUTES
+        jitter_minutes = random.randint(int(low), int(high))
+        return now + timedelta(hours=self.TOKEN_KEEPALIVE_BASE_HOURS, minutes=jitter_minutes)
+
+    def _initial_token_keepalive_time(self, now: datetime | None = None) -> datetime:
+        now = now or datetime.now()
+        low, high = self.TOKEN_KEEPALIVE_INITIAL_DELAY_MINUTES
+        delay_minutes = random.randint(int(low), int(high))
+        return now + timedelta(minutes=delay_minutes)
+
+    def _save_keepalive_schedule(
+        self,
+        auth_payload: dict[str, Any],
+        auth_path: Path,
+        next_refresh_at: datetime | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        if next_refresh_at is not None:
+            auth_payload["next_token_refresh_at"] = next_refresh_at.isoformat()
+        if error_message:
+            auth_payload["token_keepalive_error"] = str(error_message)
+        else:
+            auth_payload.pop("token_keepalive_error", None)
+        self._save_auth_payload(auth_path, auth_payload)
+
+    def _ensure_token_keepalive_schedule(
+        self,
+        alias: str,
+        auth_payload: dict[str, Any],
+        auth_path: Path,
+        now: datetime | None = None,
+    ) -> tuple[datetime, str | None]:
+        del alias
+        now = now or datetime.now()
+        next_refresh_dt = self._parse_datetime_value(auth_payload.get("next_token_refresh_at"))
+        error_message = str(auth_payload.get("token_keepalive_error") or "").strip() or None
+        if next_refresh_dt is not None:
+            return next_refresh_dt, error_message
+
+        last_refresh_dt = self._parse_datetime_value(auth_payload.get("last_refresh"))
+        if last_refresh_dt is not None:
+            due_base = last_refresh_dt + timedelta(hours=self.TOKEN_KEEPALIVE_BASE_HOURS)
+            if due_base > now:
+                next_refresh_dt = self._next_token_keepalive_time(last_refresh_dt)
+            else:
+                next_refresh_dt = self._initial_token_keepalive_time(now)
+        else:
+            try:
+                auth_mtime_dt = datetime.fromtimestamp(auth_path.stat().st_mtime)
+            except Exception:
+                auth_mtime_dt = None
+            if auth_mtime_dt is not None and auth_mtime_dt + timedelta(hours=self.TOKEN_KEEPALIVE_BASE_HOURS) > now:
+                next_refresh_dt = self._next_token_keepalive_time(auth_mtime_dt)
+            else:
+                next_refresh_dt = self._initial_token_keepalive_time(now)
+        self._save_keepalive_schedule(auth_payload, auth_path, next_refresh_dt, error_message=error_message)
+        return next_refresh_dt, error_message
+
+    def _read_token_keepalive_summary(self, alias: str, now: datetime | None = None) -> dict[str, Any]:
+        now = now or datetime.now()
+        try:
+            auth_payload, auth_path = self._load_account_auth(alias)
+        except Exception:
+            return {
+                "last_token_refresh_at": None,
+                "next_token_refresh_at": None,
+                "token_refresh_due": False,
+                "token_keepalive_error": None,
+            }
+        next_refresh_dt, error_message = self._ensure_token_keepalive_schedule(alias, auth_payload, auth_path, now=now)
+        last_refresh_dt = self._parse_datetime_value(auth_payload.get("last_refresh"))
+        return {
+            "last_token_refresh_at": last_refresh_dt.isoformat() if last_refresh_dt else None,
+            "next_token_refresh_at": next_refresh_dt.isoformat() if next_refresh_dt else None,
+            "token_refresh_due": next_refresh_dt <= now,
+            "token_keepalive_error": error_message,
+        }
+
+    def _token_keepalive_targets(self, now: datetime | None = None) -> list[str]:
+        now = now or datetime.now()
+        targets: list[tuple[float, str]] = []
+        for alias in self.get_accounts().keys():
+            try:
+                auth_payload, auth_path = self._load_account_auth(alias)
+            except Exception:
+                continue
+            next_refresh_dt, _error_message = self._ensure_token_keepalive_schedule(alias, auth_payload, auth_path, now=now)
+            if next_refresh_dt <= now:
+                targets.append((next_refresh_dt.timestamp(), alias))
+        targets.sort(key=lambda item: (item[0], item[1].lower()))
+        return [alias for _ts, alias in targets]
+
+    def refresh_access_token_for_alias(self, alias: str) -> dict[str, Any]:
+        with self._bulk_refresh_lock:
+            with self._state_lock:
+                auth_payload, auth_path = self._load_account_auth(alias)
+                tokens = auth_payload.get("tokens", {})
+                refresh_token = str(tokens.get("refresh_token") or "").strip()
+                if not refresh_token:
+                    raise ValueError("缺少 refresh_token，无法自动刷新登录凭据。")
+                tokens.update(self.refresh_access_token_payload(refresh_token))
+                tokens = self._persist_refreshed_tokens(alias, auth_payload, auth_path, tokens)
+                next_refresh_dt = self._next_token_keepalive_time()
+                self._save_keepalive_schedule(auth_payload, auth_path, next_refresh_dt, error_message=None)
+                return {
+                    "alias": alias,
+                    "ok": True,
+                    "last_refresh": auth_payload.get("last_refresh"),
+                    "next_token_refresh_at": next_refresh_dt.isoformat(),
+                    "account_id": tokens.get("account_id"),
+                }
+
+    def _record_token_keepalive_failure(self, alias: str, message: str, now: datetime | None = None) -> None:
+        now = now or datetime.now()
+        try:
+            auth_payload, auth_path = self._load_account_auth(alias)
+        except Exception:
+            return
+        next_refresh_dt = now + timedelta(minutes=self.TOKEN_KEEPALIVE_ERROR_BACKOFF_MINUTES)
+        self._save_keepalive_schedule(auth_payload, auth_path, next_refresh_dt, error_message=message)
+
+    def _token_keepalive_worker(self) -> None:
+        while True:
+            try:
+                if not self.is_token_keepalive_enabled():
+                    time.sleep(self.TOKEN_KEEPALIVE_POLL_SECONDS)
+                    continue
+                due_aliases = self._token_keepalive_targets()[: self.TOKEN_KEEPALIVE_MAX_ACCOUNTS_PER_CYCLE]
+                for alias in due_aliases:
+                    try:
+                        self.refresh_access_token_for_alias(alias)
+                    except Exception as exc:
+                        self._record_token_keepalive_failure(alias, str(exc))
+                    time.sleep(self.BULK_REFRESH_THROTTLE_SECONDS)
+            except Exception:
+                pass
+            time.sleep(self.TOKEN_KEEPALIVE_POLL_SECONDS)
+
+    def _kickoff_token_keepalive_loop(self) -> None:
+        cls = self.__class__
+        with cls._token_keepalive_guard:
+            if cls._token_keepalive_started:
+                return
+            cls._token_keepalive_started = True
+        thread = threading.Thread(target=self._token_keepalive_worker, name="codex-token-keepalive", daemon=True)
         thread.start()
 
     @staticmethod
@@ -509,7 +712,27 @@ class CodexService:
             "refresh_token": refresh_token,
             "client_id": self.AUTH_CLIENT_ID,
         }
-        data, _ = self._request_json(self.AUTH_TOKEN_URL, method="POST", data=payload)
+        try:
+            data, _ = self._request_json(self.AUTH_TOKEN_URL, method="POST", data=payload)
+        except error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "ignore")
+            detail = ""
+            try:
+                error_payload = json.loads(body)
+                detail = str((error_payload.get("error") or {}).get("message") or "").strip()
+            except Exception:
+                detail = body[:200].strip()
+            detail_lower = detail.lower()
+            if "refresh token has already been used" in detail_lower or "signing in again" in detail_lower:
+                detail = "登录凭据已过期或已被轮换，请切换到该账号重新登录后再保存。"
+            elif exc.code == 401:
+                detail = "登录凭据已失效，请切换到该账号重新登录后再保存。"
+            suffix = f"：{detail}" if detail else ""
+            raise ValueError(
+                f"自动刷新登录凭据失败（{exc.code} {exc.reason}）{suffix}"
+            ) from exc
+        except error.URLError as exc:
+            raise ValueError(f"自动刷新登录凭据请求失败：{exc}") from exc
         return {
             "access_token": data.get("access_token", ""),
             "id_token": data.get("id_token", ""),
